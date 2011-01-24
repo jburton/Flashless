@@ -40,6 +40,11 @@ OTHER DEALINGS IN THE SOFTWARE.
 	return @"YouTube";
 }
 
+- (BOOL)canFindDownload
+{
+	return videoID != nil;
+}
+
 - (void)prepare
 {
 	videoID = [flashVars objectForKey:@"video_id"];
