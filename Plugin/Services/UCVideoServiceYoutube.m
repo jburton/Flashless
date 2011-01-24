@@ -28,6 +28,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 
 #import "UCVideoServiceYoutube.h"
+@interface UCVideoServiceYoutube ()
+- (NSString *)fmtUrlMapFromVideoInfo:(NSString *)videoInfo;
+@end
+
 
 @implementation UCVideoServiceYoutube
 
@@ -76,6 +80,69 @@ OTHER DEALINGS IN THE SOFTWARE.
 	[self foundAVideo:YES];
 	[self foundOriginal:[NSURL URLWithString:[NSString stringWithFormat:@"http://www.youtube.com/watch?v=%@", videoID]]];
 	[self foundPreview:[NSURL URLWithString:[NSString stringWithFormat:@"http://i1.ytimg.com/vi/%@/hqdefault.jpg", videoID]]];
+}
+
+- (void)findDownloadURL
+{
+	if(![self canFindDownload]) {
+		[self foundNoDownload];
+		return;
+	}
+	
+	NSURL *getVideoInfoURL = [NSURL URLWithString:[NSString stringWithFormat:@"http://www.youtube.com/get_video_info?video_id=%@", videoID]];
+	[self retrieveHint:getVideoInfoURL];
+}
+
+- (void)receivedHint:(NSString *)hint
+{
+	if(hint==nil)
+	{
+		[self foundNoDownload];
+		return;
+	}
+	
+	
+	NSString *urls = [self fmtUrlMapFromVideoInfo:hint];
+	urls = [urls stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+	NSArray *fmts = [urls componentsSeparatedByString:@","];
+	
+	NSInteger bestFMT = 0;
+	NSString *bestURL = nil;
+	for (NSString *fmtURL in fmts)
+	{
+		NSScanner * scan = [NSScanner scannerWithString:fmtURL];
+		NSInteger fmt;
+		if([scan scanInteger:&fmt]) 
+		{
+			switch(fmt) {
+				case 38: // 4K
+				case 37: // 1080p
+				case 22: // 720p
+				case 18: 
+					if (fmt > bestFMT)
+					{
+						bestFMT = fmt;
+						bestURL = [[fmtURL componentsSeparatedByString:@"|"] objectAtIndex:1];
+					}
+			}
+		}
+	}
+	
+	
+	if (!bestURL)
+		[self foundNoDownload];
+	else
+		[self foundDownload:[NSURL URLWithString:bestURL]];
+}
+
+- (NSString *)fmtUrlMapFromVideoInfo:(NSString *)videoInfo
+{
+	NSString *result = nil;
+	NSArray *components = [videoInfo componentsSeparatedByString:@"fmt_url_map="];
+	if ([components count] > 0)
+		result = [[[components objectAtIndex:1] componentsSeparatedByString:@"&"] objectAtIndex:0];
+	
+	return result;
 }
 
 @end
