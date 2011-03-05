@@ -56,6 +56,9 @@ OTHER DEALINGS IN THE SOFTWARE.
 		}
 		[[self class] scan:scanString from:@"/v/" to:@"&" into:&videoID];
 		if(videoID==nil) {
+			[[self class] scan:scanString from:@"/e/" to:@"&" into:&videoID];
+		}
+		if(videoID==nil) {
 			scanString = [self queryString];
 			if(scanString==nil) {
 				[self foundNoDownload];
@@ -64,11 +67,6 @@ OTHER DEALINGS IN THE SOFTWARE.
 			[[self class] scan:scanString from:@"v=" to:@"&" into:&videoID];
 		}
 		if(videoID==nil) {
-			scanString = [self queryString];
-			if(scanString==nil) {
-				[self foundNoDownload];
-				return;
-			}
 			[[self class] scan:scanString from:@"video_id=" to:@"&" into:&videoID];
 		}
 	}
