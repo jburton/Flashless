@@ -5,33 +5,29 @@
 //  Created by Christoph on 03.09.2009.
 //  Copyright 2009-2010 Useless Coding.
 /*
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-*/
+ Permission is hereby granted, free of charge, to any person
+ obtaining a copy of this software and associated documentation
+ files (the "Software"), to deal in the Software without restriction,
+ including without limitation the rights to use, copy, modify, merge,
+ publish, distribute, sublicense, and/or sell copies of the Software,
+ and to permit persons to whom the Software is furnished to do so,
+ subject to the following conditions:
+ 
+ The above copyright notice and this permission notice shall be
+ included in all copies or substantial portions of the Software.
+ 
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 
 #import "UCVideoServiceYoutube.h"
-@interface UCVideoServiceYoutube ()
-- (NSString *)fmtUrlMapFromVideoInfo:(NSString *)videoInfo;
-@end
-
 
 @implementation UCVideoServiceYoutube
 
@@ -42,7 +38,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 - (BOOL)canFindDownload
 {
-	return videoID != nil;
+	return videoID!=nil;
 }
 
 - (void)prepare
@@ -83,6 +79,10 @@ OTHER DEALINGS IN THE SOFTWARE.
 	[self foundAVideo:YES];
 	[self foundOriginal:[NSURL URLWithString:[NSString stringWithFormat:@"http://www.youtube.com/watch?v=%@", videoID]]];
 	[self foundPreview:[NSURL URLWithString:[NSString stringWithFormat:@"http://i1.ytimg.com/vi/%@/hqdefault.jpg", videoID]]];
+	NSString * fmtMap = [flashVars objectForKey:@"fmt_url_map"];
+	if(fmtMap!=nil) {
+		[self foundDownload:[self downloadURLwithVideoID:videoID fmtMap:fmtMap]];
+	}
 }
 
 - (void)findDownloadURL
@@ -91,61 +91,59 @@ OTHER DEALINGS IN THE SOFTWARE.
 		[self foundNoDownload];
 		return;
 	}
-	
-	NSURL *getVideoInfoURL = [NSURL URLWithString:[NSString stringWithFormat:@"http://www.youtube.com/get_video_info?video_id=%@", videoID]];
-	[self retrieveHint:getVideoInfoURL];
+	NSString * fmtMap = [flashVars objectForKey:@"fmt_url_map"];
+	if(fmtMap!=nil) {
+		[self foundDownload:[self downloadURLwithVideoID:videoID fmtMap:fmtMap]];
+	} else {
+		[self retrieveHint:[NSURL URLWithString:[NSString stringWithFormat:@"http://www.youtube.com/get_video_info?video_id=%@", videoID]]];
+	}
 }
 
 - (void)receivedHint:(NSString *)hint
 {
-	if(hint==nil)
-	{
+	if(hint==nil) {
 		[self foundNoDownload];
 		return;
 	}
-	
-	
-	NSString *urls = [self fmtUrlMapFromVideoInfo:hint];
-	urls = [urls stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-	NSArray *fmts = [urls componentsSeparatedByString:@","];
-	
-	NSInteger bestFMT = 0;
-	NSString *bestURL = nil;
-	for (NSString *fmtURL in fmts)
-	{
-		NSScanner * scan = [NSScanner scannerWithString:fmtURL];
-		NSInteger fmt;
-		if([scan scanInteger:&fmt]) 
-		{
-			switch(fmt) {
-				case 38: // 4K
-				case 37: // 1080p
-				case 22: // 720p
-				case 18: 
-					if (fmt > bestFMT)
-					{
-						bestFMT = fmt;
-						bestURL = [[fmtURL componentsSeparatedByString:@"|"] objectAtIndex:1];
-					}
-			}
-		}
-	}
-	
-	
-	if (!bestURL)
+	NSString * fmtMap = nil;
+	[[self class] scan:hint from:@"fmt_url_map=" to:@"&" into:&fmtMap];
+	if(fmtMap==nil) {
 		[self foundNoDownload];
-	else
-		[self foundDownload:[NSURL URLWithString:bestURL]];
+	} else {
+		[self foundDownload:[self downloadURLwithVideoID:videoID fmtMap:fmtMap]];
+	}
 }
 
-- (NSString *)fmtUrlMapFromVideoInfo:(NSString *)videoInfo
+- (NSURL *)downloadURLwithVideoID:(NSString *)theID fmtMap:(NSString *)theMap;
 {
-	NSString *result = nil;
-	NSArray *components = [videoInfo componentsSeparatedByString:@"fmt_url_map="];
-	if ([components count] > 0)
-		result = [[[components objectAtIndex:1] componentsSeparatedByString:@"&"] objectAtIndex:0];
+	// We use the format map instead to find the download URL.
+	// This solution was originally contributed by jburton
+	// https://github.com/jburton/Flashless/commit/73886947e1fc3bb684fa0cb99e3cdcfa90d77dc9
 	
-	return result;
+	NSString * fmtMap = [theMap stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+	NSScanner * scan = [NSScanner scannerWithString:fmtMap];
+	NSInteger fmt = 0;
+	NSString * urlString = nil;
+	
+	// We assume that formats are sorted descending
+	// 34|http,18|http
+	while(![scan isAtEnd] && urlString==nil) {
+		[scan scanInteger:&fmt];
+		switch(fmt) {
+			case 38: // 4K
+			case 37: // 1080p
+			case 22: // 720p
+			case 18: break;
+			default: fmt=0;
+		}
+		if(fmt!=0 && [scan scanString:@"|" intoString:NULL]) {
+			[scan scanUpToString:@"," intoString:&urlString];
+		} else {
+			[scan scanUpToString:@"," intoString:NULL];
+		}
+		[scan scanString:@"," intoString:NULL];
+	}
+	return [NSURL URLWithString:urlString];
 }
 
 @end
