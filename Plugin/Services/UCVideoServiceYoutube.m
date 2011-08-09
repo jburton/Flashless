@@ -106,44 +106,35 @@
 		return;
 	}
 	NSString * fmtMap = nil;
-	[[self class] scan:hint from:@"fmt_url_map=" to:@"&" into:&fmtMap];
+	[[self class] scan:hint from:@"url_encoded_fmt_stream_map=" to:@"&" into:&fmtMap];
 	if(fmtMap==nil) {
 		[self foundNoDownload];
 	} else {
-		[self foundDownload:[self downloadURLwithVideoID:videoID fmtMap:fmtMap]];
+		NSURL *foundURL = [self downloadURLwithVideoID:videoID fmtMap:fmtMap];
+		if (foundURL)
+			[self foundDownload:foundURL];
+		else
+			[self foundNoDownload];
 	}
 }
 
-- (NSURL *)downloadURLwithVideoID:(NSString *)theID fmtMap:(NSString *)theMap;
+- (NSURL *)downloadURLwithVideoID:(NSString *)theID fmtMap:(NSString *)theMap
 {
-	// We use the format map instead to find the download URL.
-	// This solution was originally contributed by jburton
-	// https://github.com/jburton/Flashless/commit/73886947e1fc3bb684fa0cb99e3cdcfa90d77dc9
-	
+	theMap = [theMap stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
 	NSString * fmtMap = [theMap stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
 	NSScanner * scan = [NSScanner scannerWithString:fmtMap];
-	NSInteger fmt = 0;
 	NSString * urlString = nil;
 	
 	// We assume that formats are sorted descending
-	// 34|http,18|http
 	while(![scan isAtEnd] && urlString==nil) {
-		[scan scanInteger:&fmt];
-		switch(fmt) {
-			case 38: // 4K
-			case 37: // 1080p
-			case 22: // 720p
-			case 18: break;
-			default: fmt=0;
-		}
-		if(fmt!=0 && [scan scanString:@"|" intoString:NULL]) {
-			[scan scanUpToString:@"," intoString:&urlString];
-		} else {
-			[scan scanUpToString:@"," intoString:NULL];
-		}
-		[scan scanString:@"," intoString:NULL];
+		[scan scanUpToString:@"url=" intoString:NULL];
+		[scan scanString:@"url=" intoString:NULL];
+		[scan scanUpToString:@";" intoString:&urlString];
+		NSRange loc = [urlString rangeOfString:@"&type=video/mp4" options:NSAnchoredSearch | NSBackwardsSearch];
+		if (loc.location != NSNotFound)
+			break;
 	}
-	return [NSURL URLWithString:urlString];
+	return (urlString ? [NSURL URLWithString:urlString] : nil);
 }
 
 @end
